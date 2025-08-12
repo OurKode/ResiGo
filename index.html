@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pelacak Pengiriman Paket</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .timeline-item {
+            position: relative;
+            padding-left: 2.5rem;
+            padding-bottom: 1.5rem;
+        }
+        .timeline-item:last-child {
+            padding-bottom: 0;
+        }
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: 0.4375rem;
+            top: 0.25rem;
+            width: 2px;
+            height: 100%;
+            background-color: #e5e7eb;
+        }
+        .timeline-item:last-child::before {
+            height: 0;
+        }
+        .timeline-dot {
+            position: absolute;
+            left: 0;
+            top: 0.25rem;
+            width: 0.875rem;
+            height: 0.875rem;
+            border-radius: 9999px;
+            background-color: #fff;
+            border: 2px solid #3b82f6;
+        }
+        .notification-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #ef4444; /* red-500 */
+            margin-left: 8px;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+    </style>
+</head>
+<body class="bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200 flex items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-3xl mx-auto">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6 md:p-8 mb-6">
+            <header class="mb-6 text-center">
+                <h1 class="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white">Lacak Paket Anda</h1>
+                <p class="text-slate-500 dark:text-slate-400 mt-1">Masukkan nomor resi dan pilih ekspedisi untuk melacak.</p>
+            </header>
+
+            <!-- Form Input -->
+            <form id="tracking-form" class="space-y-4">
+                <div>
+                    <input type="text" id="awb" name="awb" required class="w-full p-3 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition" placeholder="Masukkan Nomor Resi (AWB)">
+                </div>
+                <div>
+                    <select id="courier" name="courier" required class="w-full p-3 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition">
+                        <option value="" disabled selected>Pilih Ekspedisi</option>
+                    </select>
+                </div>
+                <button type="submit" id="track-btn" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 dark:focus:ring-offset-slate-800 transition duration-300 disabled:bg-slate-400 disabled:cursor-not-allowed">
+                    Lacak Paket
+                </button>
+            </form>
+
+            <!-- Loading, Error, and Results -->
+            <div id="loading" class="text-center py-8 hidden">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                <p class="mt-4 text-slate-500 dark:text-slate-400">Mencari data pengiriman...</p>
+            </div>
+
+            <div id="error-container" class="mt-6 p-4 bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-600 text-red-700 dark:text-red-300 rounded-lg hidden">
+                <p id="error-message"></p>
+            </div>
+
+            <div id="result-container" class="mt-8 hidden">
+                <!-- Tombol Simpan ke Favorit -->
+                 <button id="save-favorite-btn" class="w-full mb-6 bg-amber-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-400 dark:focus:ring-offset-slate-800 transition duration-300">
+                    Simpan ke Favorit
+                </button>
+                <!-- Summary Section -->
+                <div id="summary-section" class="bg-slate-50 dark:bg-slate-700/50 p-5 rounded-lg">
+                    <h2 class="text-xl font-bold mb-4 text-slate-900 dark:text-white">Ringkasan Pengiriman</h2>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                        <div><p class="text-slate-500 dark:text-slate-400">No. Resi</p><p id="summary-awb" class="font-semibold text-base"></p></div>
+                        <div><p class="text-slate-500 dark:text-slate-400">Kurir</p><p id="summary-courier" class="font-semibold text-base"></p></div>
+                        <div><p class="text-slate-500 dark:text-slate-400">Layanan</p><p id="summary-service" class="font-semibold text-base"></p></div>
+                        <div><p class="text-slate-500 dark:text-slate-400">Status</p><span id="summary-status" class="font-bold text-base px-3 py-1 rounded-full"></span></div>
+                        <div><p class="text-slate-500 dark:text-slate-400">Tanggal Pengiriman</p><p id="summary-date" class="font-semibold text-base"></p></div>
+                        <div><p class="text-slate-500 dark:text-slate-400">Berat</p><p id="summary-weight" class="font-semibold text-base"></p></div>
+                    </div>
+                </div>
+                <!-- Detail Section -->
+                <div id="detail-section" class="mt-6 grid md:grid-cols-2 gap-6">
+                     <div class="bg-slate-50 dark:bg-slate-700/50 p-5 rounded-lg"><h3 class="text-lg font-bold mb-3 text-slate-900 dark:text-white">Pengirim</h3><p id="detail-shipper" class="text-base"></p><p id="detail-origin" class="text-slate-500 dark:text-slate-400 text-sm"></p></div>
+                     <div class="bg-slate-50 dark:bg-slate-700/50 p-5 rounded-lg"><h3 class="text-lg font-bold mb-3 text-slate-900 dark:text-white">Penerima</h3><p id="detail-receiver" class="text-base"></p><p id="detail-destination" class="text-slate-500 dark:text-slate-400 text-sm"></p></div>
+                </div>
+                <!-- History Section -->
+                <div id="history-section" class="mt-8"><h2 class="text-xl font-bold mb-5 text-slate-900 dark:text-white">Riwayat Perjalanan</h2><ul id="history-list"></ul></div>
+            </div>
+        </div>
+
+        <!-- Favorites Section -->
+        <div id="favorites-section" class="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6 md:p-8">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold text-slate-900 dark:text-white">Resi Favorit</h2>
+                <span id="favorites-loading" class="text-sm text-slate-500 hidden">Memeriksa pembaruan...</span>
+            </div>
+            <ul id="favorites-list" class="space-y-3">
+                <!-- Favorite items will be injected here -->
+            </ul>
+        </div>
+    </div>
+
+    <!-- Modal for saving favorite -->
+    <div id="favorite-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white dark:bg-slate-800 rounded-lg shadow-xl p-6 w-full max-w-sm">
+            <h3 class="text-lg font-bold mb-4">Simpan Resi Favorit</h3>
+            <p class="text-sm text-slate-600 dark:text-slate-400 mb-2">Beri nama untuk resi <strong id="modal-awb" class="text-slate-800 dark:text-slate-200"></strong> agar mudah diingat.</p>
+            <input type="text" id="favorite-name" class="w-full p-2 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500" placeholder="Contoh: Sepatu dari Jakarta">
+            <div class="mt-4 flex justify-end space-x-2">
+                <button id="cancel-favorite-btn" class="px-4 py-2 bg-slate-200 dark:bg-slate-600 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500">Batal</button>
+                <button id="confirm-favorite-btn" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Simpan</button>
+            </div>
+        </div>
+    </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // --- KONFIGURASI ---
+    const apiKey = '1bc930ae1b0348e16d626e902b6dc3dabb8f9a4739f0e0a04f89713da4dc33b3';
+    const couriers = [
+        { "code": "anteraja", "description": "AnterAja" },
+        { "code": "dakota", "description": "Dakota Cargo" },
+        { "code": "first", "description": "First Logistics" },
+        { "code": "ide", "description": "ID Express" },
+        { "code": "indah_cargo", "description": "Indah Cargo" },
+        { "code": "jet", "description": "JET Express" },
+        { "code": "jne", "description": "JNE Express" },
+        { "code": "jnt", "description": "J&T Express" },
+        { "code": "jnt_cargo", "description": "J&T Cargo" },
+        { "code": "kgx", "description": "KGXpress" },
+        { "code": "kurir_tokopedia", "description": "Kurir Rekomendasi" },
+        { "code": "lex", "description": "Lazada Express" },
+        { "code": "lion", "description": "Lion Parcel" },
+        { "code": "ninja", "description": "Ninja Express" },
+        { "code": "pcp", "description": "PCP Express" },
+        { "code": "pos", "description": "POS Indonesia" },
+        { "code": "rex", "description": "REX Express" },
+        { "code": "rpx", "description": "RPX" },
+        { "code": "sap", "description": "SAP Express" },
+        { "code": "sicepat", "description": "SiCepat" },
+        { "code": "spx", "description": "Shopee Express" },
+        { "code": "tiki", "description": "TIKI" },
+        { "code": "wahana", "description": "Wahana" }
+    ];
+
+    // --- ELEMEN DOM ---
+    const courierSelect = document.getElementById('courier');
+    const trackingForm = document.getElementById('tracking-form');
+    const trackBtn = document.getElementById('track-btn');
+    const loadingEl = document.getElementById('loading');
+    const errorContainer = document.getElementById('error-container');
+    const errorMessageEl = document.getElementById('error-message');
+    const resultContainer = document.getElementById('result-container');
+    const favoritesList = document.getElementById('favorites-list');
+    const saveFavoriteBtn = document.getElementById('save-favorite-btn');
+    const favoriteModal = document.getElementById('favorite-modal');
+    const favoritesLoading = document.getElementById('favorites-loading');
+
+    let currentTrackingData = null;
+
+    // --- FUNGSI FAVORIT (LocalStorage) ---
+    const getFavorites = () => JSON.parse(localStorage.getItem('shipmentFavorites')) || [];
+    const saveFavorites = (favorites) => localStorage.setItem('shipmentFavorites', JSON.stringify(favorites));
+
+    // --- FUNGSI ---
+    function populateCouriers() {
+        couriers.sort((a, b) => a.description.localeCompare(b.description));
+        couriers.forEach(courier => {
+            const option = document.createElement('option');
+            option.value = courier.code;
+            option.textContent = courier.description;
+            courierSelect.appendChild(option);
+        });
+    }
+
+    function showError(message) {
+        errorMessageEl.textContent = message;
+        errorContainer.classList.remove('hidden');
+    }
+
+    function formatDate(dateString) {
+        if (!dateString) return 'N/A';
+        const options = { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+        return new Date(dateString).toLocaleDateString('id-ID', options).replace(/\./g, ':');
+    }
+
+    function displayResults(data, isFromFavorite = false) {
+        currentTrackingData = data;
+        const { summary, detail, history } = data;
+
+        document.getElementById('summary-awb').textContent = summary.awb || 'N/A';
+        document.getElementById('summary-courier').textContent = summary.courier || 'N/A';
+        document.getElementById('summary-service').textContent = summary.service || 'N/A';
+        document.getElementById('summary-date').textContent = formatDate(summary.date);
+        document.getElementById('summary-weight').textContent = summary.weight || 'N/A';
+
+        const statusEl = document.getElementById('summary-status');
+        statusEl.textContent = summary.status || 'N/A';
+        statusEl.className = 'font-bold text-base px-3 py-1 rounded-full';
+        if (summary.status === 'DELIVERED') {
+            statusEl.classList.add('bg-green-100', 'text-green-800', 'dark:bg-green-900/50', 'dark:text-green-300');
+        } else if (summary.status === 'ON PROCESS' || summary.status === 'ON-PROCESS') {
+            statusEl.classList.add('bg-yellow-100', 'text-yellow-800', 'dark:bg-yellow-900/50', 'dark:text-yellow-300');
+        } else {
+            statusEl.classList.add('bg-slate-200', 'text-slate-800', 'dark:bg-slate-600', 'dark:text-slate-200');
+        }
+
+        document.getElementById('detail-shipper').textContent = detail.shipper || 'N/A';
+        document.getElementById('detail-origin').textContent = detail.origin || 'N/A';
+        document.getElementById('detail-receiver').textContent = detail.receiver || 'N/A';
+        document.getElementById('detail-destination').textContent = detail.destination || 'N/A';
+
+        const historyList = document.getElementById('history-list');
+        historyList.innerHTML = '';
+        if (history && history.length > 0) {
+            history.forEach(item => {
+                const li = document.createElement('li');
+                li.className = 'timeline-item';
+                li.innerHTML = `<div class="timeline-dot"></div><time class="mb-1 text-sm font-normal leading-none text-slate-400 dark:text-slate-500">${formatDate(item.date)}</time><p class="text-base font-semibold text-slate-900 dark:text-white">${item.desc}</p>${item.location ? `<p class="text-sm text-slate-500 dark:text-slate-400">${item.location}</p>` : ''}`;
+                historyList.appendChild(li);
+            });
+        } else {
+            historyList.innerHTML = '<p class="text-slate-500">Tidak ada data riwayat perjalanan.</p>';
+        }
+        
+        const favorites = getFavorites();
+        const isFavorited = favorites.some(fav => fav.awb === summary.awb);
+        saveFavoriteBtn.classList.toggle('hidden', isFavorited);
+
+        resultContainer.classList.remove('hidden');
+        if (isFromFavorite) {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+    }
+
+    function renderFavorites() {
+        favoritesList.innerHTML = '';
+        const favorites = getFavorites();
+        if (favorites.length === 0) {
+            favoritesList.innerHTML = '<li><p class="text-slate-500 text-center italic">Belum ada resi favorit.</p></li>';
+            return;
+        }
+        favorites.forEach(fav => {
+            const li = document.createElement('li');
+            li.className = 'bg-slate-50 dark:bg-slate-700/50 p-3 rounded-lg flex items-center justify-between';
+            li.innerHTML = `
+                <div class="flex-grow min-w-0">
+                    <p class="font-bold text-slate-800 dark:text-slate-200 truncate">${fav.name} ${fav.hasUpdate ? '<span class="notification-dot" title="Ada pembaruan"></span>' : ''}</p>
+                    <p class="text-sm text-slate-500 dark:text-slate-400 truncate">${fav.courierName} - ${fav.awb}</p>
+                    <p class="text-xs text-slate-400 dark:text-slate-500 mt-1">Status: ${fav.lastStatus || 'N/A'}</p>
+                </div>
+                <div class="flex space-x-2 flex-shrink-0 ml-4">
+                    <button data-awb="${fav.awb}" data-courier="${fav.courierCode}" class="track-fav-btn p-2 bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300 rounded-md hover:bg-blue-200 dark:hover:bg-blue-800" title="Lacak Ulang">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" /></svg>
+                    </button>
+                    <button data-awb="${fav.awb}" class="delete-fav-btn p-2 bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-300 rounded-md hover:bg-red-200 dark:hover:bg-red-800" title="Hapus">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" /></svg>
+                    </button>
+                </div>
+            `;
+            favoritesList.appendChild(li);
+        });
+    }
+
+    async function handleTrack(e, awbOverride = null, courierOverride = null) {
+        if (e) e.preventDefault();
+        const awb = awbOverride || document.getElementById('awb').value.trim();
+        const courier = courierOverride || courierSelect.value;
+        const isFromFavorite = !!awbOverride;
+
+        if (!awb || !courier) {
+            showError('Nomor resi dan ekspedisi harus diisi.');
+            return;
+        }
+
+        trackBtn.disabled = true;
+        loadingEl.classList.remove('hidden');
+        errorContainer.classList.add('hidden');
+        resultContainer.classList.add('hidden');
+
+        const apiUrl = `https://api.binderbyte.com/v1/track?api_key=${apiKey}&courier=${courier}&awb=${awb}`;
+        try {
+            const response = await fetch(apiUrl);
+            const data = await response.json();
+            if (data.status === 200 && data.data) {
+                displayResults(data.data, isFromFavorite);
+                if (isFromFavorite) {
+                    let favorites = getFavorites();
+                    const favIndex = favorites.findIndex(f => f.awb === awb);
+                    if (favIndex !== -1 && favorites[favIndex].hasUpdate) {
+                        favorites[favIndex].hasUpdate = false;
+                        favorites[favIndex].lastStatus = data.data.summary.status;
+                        favorites[favIndex].lastHistoryCount = data.data.history.length;
+                        saveFavorites(favorites);
+                        renderFavorites();
+                    }
+                }
+            } else {
+                showError(data.message || 'Terjadi kesalahan saat mengambil data.');
+            }
+        } catch (error) {
+            showError('Gagal terhubung ke server. Periksa koneksi internet Anda.');
+        } finally {
+            loadingEl.classList.add('hidden');
+            trackBtn.disabled = false;
+        }
+    }
+
+    function openFavoriteModal() {
+        if (!currentTrackingData) return;
+        document.getElementById('modal-awb').textContent = currentTrackingData.summary.awb;
+        document.getElementById('favorite-name').value = '';
+        favoriteModal.classList.remove('hidden');
+    }
+
+    function closeFavoriteModal() {
+        favoriteModal.classList.add('hidden');
+    }
+
+    function confirmSaveFavorite() {
+        const name = document.getElementById('favorite-name').value.trim();
+        if (!name) {
+            alert('Nama tidak boleh kosong.');
+            return;
+        }
+        const { summary, history } = currentTrackingData;
+        const courierInfo = couriers.find(c => c.description === summary.courier);
+
+        const newFavorite = {
+            name: name,
+            awb: summary.awb,
+            courierCode: courierInfo ? courierInfo.code : '',
+            courierName: summary.courier,
+            lastStatus: summary.status,
+            lastHistoryCount: history.length,
+            hasUpdate: false
+        };
+
+        let favorites = getFavorites();
+        favorites.push(newFavorite);
+        saveFavorites(favorites);
+        renderFavorites();
+        closeFavoriteModal();
+        saveFavoriteBtn.classList.add('hidden');
+    }
+
+    async function checkForUpdates() {
+        let favorites = getFavorites();
+        if (favorites.length === 0) return;
+
+        favoritesLoading.classList.remove('hidden');
+        let hasChanges = false;
+
+        for (const fav of favorites) {
+            const apiUrl = `https://api.binderbyte.com/v1/track?api_key=${apiKey}&courier=${fav.courierCode}&awb=${fav.awb}`;
+            try {
+                const response = await fetch(apiUrl);
+                const data = await response.json();
+                if (data.status === 200 && data.data) {
+                    const newStatus = data.data.summary.status;
+                    const newHistoryCount = data.data.history.length;
+                    if (newStatus !== fav.lastStatus || newHistoryCount !== fav.lastHistoryCount) {
+                        fav.hasUpdate = true;
+                        fav.lastStatus = newStatus;
+                        fav.lastHistoryCount = newHistoryCount;
+                        hasChanges = true;
+                    }
+                }
+            } catch (error) {
+                console.error(`Gagal memeriksa pembaruan untuk ${fav.awb}:`, error);
+            }
+        }
+
+        if (hasChanges) {
+            saveFavorites(favorites);
+            renderFavorites();
+        }
+        favoritesLoading.classList.add('hidden');
+    }
+
+    // --- EVENT LISTENERS ---
+    trackingForm.addEventListener('submit', handleTrack);
+    saveFavoriteBtn.addEventListener('click', openFavoriteModal);
+    document.getElementById('cancel-favorite-btn').addEventListener('click', closeFavoriteModal);
+    document.getElementById('confirm-favorite-btn').addEventListener('click', confirmSaveFavorite);
+
+    favoritesList.addEventListener('click', (e) => {
+        const trackButton = e.target.closest('.track-fav-btn');
+        const deleteButton = e.target.closest('.delete-fav-btn');
+
+        if (trackButton) {
+            const awb = trackButton.dataset.awb;
+            const courier = trackButton.dataset.courier;
+            document.getElementById('awb').value = awb;
+            courierSelect.value = courier;
+            handleTrack(null, awb, courier);
+        }
+
+        if (deleteButton) {
+            const awb = deleteButton.dataset.awb;
+            if (confirm(`Apakah Anda yakin ingin menghapus resi ${awb} dari favorit?`)) {
+                let favorites = getFavorites();
+                favorites = favorites.filter(fav => fav.awb !== awb);
+                saveFavorites(favorites);
+                renderFavorites();
+            }
+        }
+    });
+
+    // --- INISIALISASI ---
+    populateCouriers();
+    renderFavorites();
+    checkForUpdates();
+});
+</script>
+
+</body>
+</html>
