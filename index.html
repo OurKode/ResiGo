@@ -122,7 +122,17 @@
         <div id="favorites-section" class="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-6 md:p-8">
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-xl font-bold text-slate-900 dark:text-white">Resi Favorit</h2>
-                <span id="favorites-loading" class="text-sm text-slate-500 hidden">Memeriksa pembaruan...</span>
+                <div class="flex items-center space-x-4">
+                    <button id="notification-btn" class="p-2 bg-slate-200 dark:bg-slate-700 rounded-md hover:bg-slate-300 dark:hover:bg-slate-600" title="Aktifkan Notifikasi">
+                        <svg id="notification-icon-off" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                        </svg>
+                        <svg id="notification-icon-on" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                             <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-5.223-5.942M9 5.055a2 2 0 10-3.777-1.322M9 11V6a3 3 0 013-3m-3 8v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                        </svg>
+                    </button>
+                    <span id="favorites-loading" class="text-sm text-slate-500 hidden">Memeriksa pembaruan...</span>
+                </div>
             </div>
             <ul id="favorites-list" class="space-y-3">
                 <!-- Favorite items will be injected here -->
@@ -391,9 +401,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     const newHistoryCount = data.data.history.length;
                     if (newStatus !== fav.lastStatus || newHistoryCount !== fav.lastHistoryCount) {
                         fav.hasUpdate = true;
+                        const oldStatus = fav.lastStatus;
                         fav.lastStatus = newStatus;
                         fav.lastHistoryCount = newHistoryCount;
                         hasChanges = true;
+
+                        // Tampilkan notifikasi
+                        const notificationTitle = `Update Resi: ${fav.name}`;
+                        const notificationBody = `Status berubah dari ${oldStatus} menjadi ${newStatus}. Klik untuk melihat detail.`;
+                        showNotification(notificationTitle, notificationBody);
                     }
                 }
             } catch (error) {
@@ -409,6 +425,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- EVENT LISTENERS ---
+    document.getElementById('notification-btn').addEventListener('click', requestNotificationPermission);
     trackingForm.addEventListener('submit', handleTrack);
     saveFavoriteBtn.addEventListener('click', openFavoriteModal);
     document.getElementById('cancel-favorite-btn').addEventListener('click', closeFavoriteModal);
@@ -437,10 +454,73 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // --- FUNGSI NOTIFIKASI ---
+    function updateNotificationButtonState(permission) {
+        const btn = document.getElementById('notification-btn');
+        const iconOn = document.getElementById('notification-icon-on');
+        const iconOff = document.getElementById('notification-icon-off');
+
+        if (permission === 'granted') {
+            btn.title = 'Notifikasi Aktif';
+            iconOn.classList.remove('hidden');
+            iconOff.classList.add('hidden');
+        } else {
+            btn.title = 'Aktifkan Notifikasi';
+            iconOn.classList.add('hidden');
+            iconOff.classList.remove('hidden');
+        }
+    }
+
+    function requestNotificationPermission() {
+        if (!('Notification' in window)) {
+            alert('Browser ini tidak mendukung notifikasi desktop.');
+            return;
+        }
+
+        Notification.requestPermission().then(permission => {
+            updateNotificationButtonState(permission);
+            if (permission === 'granted') {
+                registerServiceWorker();
+            }
+        });
+    }
+
+    function registerServiceWorker() {
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js')
+                .then(registration => {
+                    console.log('Service Worker registered with scope:', registration.scope);
+                })
+                .catch(error => {
+                    console.error('Service Worker registration failed:', error);
+                });
+        }
+    }
+
+    function showNotification(title, body) {
+        if (Notification.permission === 'granted') {
+            navigator.serviceWorker.getRegistration().then(registration => {
+                if (registration) {
+                    registration.showNotification(title, {
+                        body: body,
+                        icon: 'icon.png' // Optional: Ganti dengan path ikon Anda
+                    });
+                }
+            });
+        }
+    }
+
+
     // --- INISIALISASI ---
     populateCouriers();
     renderFavorites();
     checkForUpdates();
+    if ('Notification' in window) {
+        updateNotificationButtonState(Notification.permission);
+        if (Notification.permission === 'granted') {
+            registerServiceWorker();
+        }
+    }
 });
 </script>
 
